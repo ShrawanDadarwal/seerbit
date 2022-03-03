@@ -1,9 +1,11 @@
 package com.seerbit.demo.services;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.seerbit.demo.exception.ReferenceNumberMustBeUniqieException;
+import com.seerbit.demo.exception.ResourceNotFoundException;
+import com.seerbit.demo.exception.TransactionFailedException;
 import com.seerbit.demo.mapstruct.mapper.AccountPayoutMapper;
 import com.seerbit.demo.mapstruct.mapper.CashPickUpMapper;
 import com.seerbit.demo.mapstruct.mapper.CheckStatusMapper;
@@ -55,7 +57,7 @@ public class AccoutPayoutService {
 			AccountPayoutPOJO entity = accountPayoutMapper
 					.toEntity(payoutRepository.save(accountPayoutMapper.toDto(payout)));
 
-			payoutResponse.setCode(HttpStatus.CREATED.toString());
+			payoutResponse.setCode(TransactionCode.TRA_SUCCESSFUL);
 			payoutResponse.setMessage("Successful");
 			ReferenceTransactionPOJO referenceTransactionPOJO = new ReferenceTransactionPOJO();
 			referenceTransactionPOJO.setReference(entity.getTransaction().getReference());
@@ -63,8 +65,7 @@ public class AccoutPayoutService {
 																// referenceId
 			payoutResponse.setTransaction(referenceTransactionPOJO);
 		} catch (Exception e) {
-			payoutResponse.setCode(TransactionCode.TRA_FAI);
-			payoutResponse.setMessage("Transaction Failed");
+			throw new TransactionFailedException("Transaction Failed");
 		}
 		return payoutResponse;
 	}
@@ -75,15 +76,14 @@ public class AccoutPayoutService {
 		try {
 			FundTransferToWalletPOJO fundTransfer = extracted(fundTransferToWalletPOJO);
 			
-			payoutResponse.setCode(HttpStatus.CREATED.toString());
+			payoutResponse.setCode(TransactionCode.TRA_SUCCESSFUL);
 			payoutResponse.setMessage("Successful");
 			ReferenceTransactionPOJO referenceTransactionPOJO = new ReferenceTransactionPOJO();
 			referenceTransactionPOJO.setReference(fundTransfer.getTransaction().getReference());
 			referenceTransactionPOJO.setLinkingreference(null); // todo: need to understand from where to collect
 			payoutResponse.setTransaction(referenceTransactionPOJO);
 		} catch (Exception e) {
-			payoutResponse.setCode(TransactionCode.TRA_FAI);
-			payoutResponse.setMessage("Transaction Failed");
+			throw new TransactionFailedException("Transaction Failed");
 		}
 		return payoutResponse;
 	}
@@ -101,10 +101,9 @@ public class AccoutPayoutService {
 			 checkStatusResponse = checkStatusMapper.toEntity(accountPayout);
 			
 			if(checkStatusResponse == null) {
-				checkStatusResponse.setCode(TransactionCode.TRA_REF_MUS_BE_UNI);
-				checkStatusResponse.setMessage("Transaction reference must be unique");
+				throw new ResourceNotFoundException("No Data Found");
 			}else {
-				checkStatusResponse.setCode(HttpStatus.OK.toString());
+				checkStatusResponse.setCode(TransactionCode.TRA_SUCCESSFUL);
 				checkStatusResponse.setMessage("Successful");
 				ReferenceTransactionPOJO referenceTransactionPOJO = new ReferenceTransactionPOJO();
 				referenceTransactionPOJO.setReference(referenceNo);
@@ -117,8 +116,7 @@ public class AccoutPayoutService {
 			}
 			
 		} catch (Exception e) {
-			checkStatusResponse.setCode(TransactionCode.TRA_REF_MUS_BE_UNI);
-			checkStatusResponse.setMessage("Transaction reference must be unique");
+			throw new TransactionFailedException("Transaction Failed");
 		}
 		return checkStatusResponse;
 	}
@@ -129,16 +127,18 @@ public class AccoutPayoutService {
 		try {
 
 			CashPickUp cashPickUp = cashPickUpRepository.save(cashPickUpMapper.toDto(cashPickUpPOJO));
-
-			payoutResponse.setCode(HttpStatus.CREATED.toString());
-			payoutResponse.setMessage("Successful");
-			ReferenceTransactionPOJO referenceTransactionPOJO = new ReferenceTransactionPOJO();
-			referenceTransactionPOJO.setReference(cashPickUp.getTransaction().getReference());
-			referenceTransactionPOJO.setLinkingreference(null); // todo: need to understand from where to collect
-			payoutResponse.setTransaction(referenceTransactionPOJO);
+			if (cashPickUp != null) {
+				payoutResponse.setCode(TransactionCode.TRA_SUCCESSFUL);
+				payoutResponse.setMessage("Successful");
+				ReferenceTransactionPOJO referenceTransactionPOJO = new ReferenceTransactionPOJO();
+				referenceTransactionPOJO.setReference(cashPickUp.getTransaction().getReference());
+				referenceTransactionPOJO.setLinkingreference(null); // todo: need to understand from where to collect
+				payoutResponse.setTransaction(referenceTransactionPOJO);
+			} else if (cashPickUp == null) {
+				throw new ResourceNotFoundException("No Data Found");
+			}
 		} catch (Exception e) {
-			payoutResponse.setCode(TransactionCode.TRA_FAI);
-			payoutResponse.setMessage("Transaction Failed");
+			throw new TransactionFailedException("Transaction Failed");
 		}
 		return payoutResponse;
 	}
@@ -158,14 +158,13 @@ public class AccoutPayoutService {
 			CashPickUp save = cashPickUpRepository.save(cashPickUpMapper.toDto(cashPickUpPoJo));
 			
 			payoutResponse.setCode(TransactionCode.TRA_SUCCESSFUL);
-			payoutResponse.setMessage("Successful");
+			payoutResponse.setMessage("Cancel Successfully");
 			ReferenceTransactionPOJO referenceTransactionPOJO = new ReferenceTransactionPOJO();
 			referenceTransactionPOJO.setReference(save.getTransaction().getReference());
 			referenceTransactionPOJO.setLinkingreference(null); // todo: need to understand from where to collect
 			payoutResponse.setTransaction(referenceTransactionPOJO);
 		} catch (Exception e) {
-			payoutResponse.setCode(TransactionCode.TRA_REF_MUS_BE_UNI);
-			payoutResponse.setMessage("Transaction reference must be unique");
+			throw new ReferenceNumberMustBeUniqieException("Transaction reference must be unique");
 		}
 		return payoutResponse;
 	}
@@ -187,16 +186,14 @@ public class AccoutPayoutService {
 
 				cashPickUpRepository.save(cashPickUpMapper.toDto(cashPickUpPoJo));
 				payoutResponse.setCode(TransactionCode.TRA_SUCCESSFUL);
-				payoutResponse.setMessage("Successful");
+				payoutResponse.setMessage("Update Successfully");
 				payoutResponse.setTransaction(new ReferenceTransactionPOJO());
 			}else if(cashPickUpPoJo == null) {
-				payoutResponse.setCode(TransactionCode.NO_DAT_FOU);
-				payoutResponse.setMessage("No Data Found");
+				throw new ResourceNotFoundException("No Data Found");
 			}
 		}
 		catch (Exception e) {
-			payoutResponse.setCode(TransactionCode.TRA_REF_MUS_BE_UNI);
-			payoutResponse.setMessage("Transaction reference must be unique");              
+			throw new ReferenceNumberMustBeUniqieException("Transaction reference must be unique");            
 		}
 		return payoutResponse;
 		
